@@ -1,0 +1,280 @@
+<?xml version="1.0"?>
+<!--
+  Copyright 2015 Fadri Furrer, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Michael Burri, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Mina Kamel, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Janosch Nikolic, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Markus Achtelik, ASL, ETH Zurich, Switzerland
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<robot name="tricopter" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- Properties -->
+  <xacro:property name="namespace" value="$(arg namespace)" />
+  <xacro:property name="rotor_velocity_slowdown_sim" value="10" />
+  <xacro:property name="throttle" value="600"/> <!-- max rpm value, tuned to realistic behavior. changed 600>700-->
+  <xacro:property name="ccw" value="1"/>
+  <xacro:property name="cw" value="-1"/>
+  <xacro:property name="use_mesh_file" value="true" />
+  <xacro:property name="mesh_file" value="package://ardu_urdf_sandbox/meshes/trihexa.stl" />
+  <xacro:property name="mass" value="2.0" /> <!-- [kg] not included VLP and Cam mount-->
+  <xacro:property name="body_width" value="0.55" /> <!-- [m] -->
+  <xacro:property name="body_height" value="0.6 " /> <!-- [m] -->
+  <xacro:property name="mass_rotor" value="0.04" /> <!-- [kg] -->
+  <xacro:property name="arm_length" value="0.4" /> <!-- [m] -->
+  <xacro:property name="rotor_offset_top" value="0.055" /> <!-- 0.025 [m] -->
+  <xacro:property name="radius_rotor" value="0.175" /> <!-- [m] -->
+  <xacro:property name="motor_constant" value="0.02246" /> <!-- [kg m/s^2] -->
+  <xacro:property name="moment_constant" value="0.016" /> <!-- [m] N/A -->
+  <xacro:property name="time_constant_up" value="0.0125" /> <!-- [s] N/A -->
+  <xacro:property name="time_constant_down" value="0.025" /> <!-- [s] N/A -->
+  <xacro:property name="max_rot_velocity" value="916.0" /> <!-- [rad/s] -->
+  <xacro:property name="sin60" value="0.866025403784" />
+  <xacro:property name="cos60" value="0.5" />
+  <xacro:property name="rotor_drag_coefficient" value="8.06428e-05" /> <!-- N/A -->
+  <xacro:property name="rolling_moment_coefficient" value="0.000001" /> <!-- N/A -->
+
+  <!-- Property Blocks -->
+  <xacro:property name="body_inertia">
+    <inertia ixx="0.012" ixy="0.0" ixz="0.0" iyy="0.015" iyz="0.0" izz="0.027" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+  </xacro:property>
+
+  <!-- inertia of a single rotor, assuming it is a cuboid. Height=3mm, width=15mm -->
+  <xacro:property name="rotor_inertia">
+    <xacro:box_inertia x="${radius_rotor}" y="0.005" z="0.003" mass="${mass_rotor*rotor_velocity_slowdown_sim}" />
+  </xacro:property>
+
+  <!-- Included URDF Files -->
+  <xacro:include filename="$(find ardu_urdf_sandbox)/urdf/multirotor_base.xacro" />
+
+  <!-- Instantiate multirotor_base_macro once -->
+  <xacro:multirotor_base_macro
+    robot_namespace="${namespace}"
+    mass="${mass}"
+    body_width="${body_width}"
+    body_height="${body_height}"
+    use_mesh_file="${use_mesh_file}"
+    mesh_file="${mesh_file}"
+    >
+    <xacro:insert_block name="body_inertia" />
+  </xacro:multirotor_base_macro>
+
+  <gazebo>
+      <plugin name="arducopter_plugin" filename="libArduPilotPlugin.so">
+		    <fdm_addr>127.0.0.1</fdm_addr>
+		    <fdm_port_in>9002</fdm_port_in>
+		    <fdm_port_out>9003</fdm_port_out>
+		    <modelXYZToAirplaneXForwardZDown>0 0 0 3.141593 0 0</modelXYZToAirplaneXForwardZDown>
+		    <gazeboXYZToNED>0 0 0 3.141593 0 0</gazeboXYZToNED>
+		    <imuName>${namespace}::imu_link::imu_sensor</imuName>
+		    <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
+		    <control channel="0">
+		      <type>VELOCITY</type>
+		      <offset>0</offset>
+		      <p_gain>0.20</p_gain>
+		      <i_gain>0</i_gain>
+		      <d_gain>0</d_gain>
+		      <i_max>0</i_max>
+		      <i_min>0</i_min>
+		      <cmd_max>2.5</cmd_max>
+		      <cmd_min>-2.5</cmd_min>
+		      <jointName>${namespace}::${namespace}/rotor_0_joint</jointName>
+		      <multiplier>${throttle}</multiplier>
+		      <controlVelocitySlowdownSim>10</controlVelocitySlowdownSim>
+		    </control>
+		    <control channel="1">
+		      <type>VELOCITY</type>
+		      <offset>0</offset>
+		      <p_gain>0.20</p_gain>
+		      <i_gain>0</i_gain>
+		      <d_gain>0</d_gain>
+		      <i_max>0</i_max>
+		      <i_min>0</i_min>
+		      <cmd_max>2.5</cmd_max>
+		      <cmd_min>-2.5</cmd_min>
+		      <jointName>${namespace}::${namespace}/rotor_1_joint</jointName>
+		      <multiplier>${throttle}</multiplier>
+		      <controlVelocitySlowdownSim>10</controlVelocitySlowdownSim>
+		    </control>
+		    <control channel="2">
+		      <type>VELOCITY</type>
+		      <offset>0</offset>
+		      <p_gain>0.20</p_gain>
+		      <i_gain>0</i_gain>
+		      <d_gain>0</d_gain>
+		      <i_max>0</i_max>
+		      <i_min>0</i_min>
+		      <cmd_max>2.5</cmd_max>
+		      <cmd_min>-2.5</cmd_min>
+		      <jointName>${namespace}::${namespace}/rotor_2_joint</jointName>
+		      <multiplier>${throttle}</multiplier>
+		      <controlVelocitySlowdownSim>10</controlVelocitySlowdownSim>
+		    </control>
+		    <control channel="3">
+		      <type>VELOCITY</type>
+		      <offset>0</offset>
+		      <p_gain>0.20</p_gain>
+		      <i_gain>0</i_gain>
+		      <d_gain>0</d_gain>
+		      <i_max>0</i_max>
+		      <i_min>0</i_min>
+		      <cmd_max>2.5</cmd_max>
+		      <cmd_min>-2.5</cmd_min>
+		      <jointName>${namespace}::${namespace}/rotor_3_joint</jointName>
+		      <multiplier>${-throttle}</multiplier>
+		      <controlVelocitySlowdownSim>10</controlVelocitySlowdownSim>
+		    </control>
+		    <control channel="4">
+		      <type>VELOCITY</type>
+		      <offset>0</offset>
+		      <p_gain>0.20</p_gain>
+		      <i_gain>0</i_gain>
+		      <d_gain>0</d_gain>
+		      <i_max>0</i_max>
+		      <i_min>0</i_min>
+		      <cmd_max>2.5</cmd_max>
+		      <cmd_min>-2.5</cmd_min>
+		      <jointName>${namespace}::${namespace}/rotor_4_joint</jointName>
+		      <multiplier>${-throttle}</multiplier>
+		      <controlVelocitySlowdownSim>10</controlVelocitySlowdownSim>
+		    </control>
+		    <control channel="5">
+		      <type>VELOCITY</type>
+		      <offset>0</offset>
+		      <p_gain>0.20</p_gain>
+		      <i_gain>0</i_gain>
+		      <d_gain>0</d_gain>
+		      <i_max>0</i_max>
+		      <i_min>0</i_min>
+		      <cmd_max>2.5</cmd_max>
+		      <cmd_min>-2.5</cmd_min>
+		      <jointName>${namespace}::${namespace}/rotor_5_joint</jointName>
+		      <multiplier>${-throttle}</multiplier>
+		      <controlVelocitySlowdownSim>10</controlVelocitySlowdownSim>
+		    </control>
+		  </plugin>    
+  </gazebo>
+
+  <!-- Instantiate rotors -->
+  <!-- ccw:=1, cw:=-1 -->
+  <xacro:gazebo_rotor
+    robot_namespace="${namespace}"
+    suffix="back_top"
+    direction="${ccw}" 
+    parent="${namespace}/base_link"
+    mass_rotor="${mass_rotor}"
+    radius_rotor="${radius_rotor}"
+    motor_number="0"
+    color="Red"
+		string_dir="ccw"
+		dx="-${arm_length}"
+		dy="${0}"
+		dz="${rotor_offset_top}"
+		ix="9.75e-06"
+		iy="0.000166704"
+		iz="0.000167604">
+  </xacro:gazebo_rotor>
+
+  <xacro:gazebo_rotor
+    robot_namespace="${namespace}"
+    suffix="back_bottom"
+    direction="${cw}" 
+    parent="${namespace}/base_link"
+    mass_rotor="${mass_rotor}"
+    radius_rotor="${radius_rotor}"
+    motor_number="3"
+    color="Blue"
+		string_dir="cw"
+		dx="-${arm_length}"
+		dy="${0}"
+		dz="-${rotor_offset_top-0.006}"
+		ix="9.75e-06"
+		iy="0.000166704"
+		iz="0.000167604">
+  </xacro:gazebo_rotor>
+
+  <xacro:gazebo_rotor
+    robot_namespace="${namespace}"
+    suffix="right_top"
+    direction="${ccw}" 
+    parent="${namespace}/base_link"
+    mass_rotor="${mass_rotor}"
+    radius_rotor="${radius_rotor}"
+    motor_number="1"
+    color="Red"
+		string_dir="ccw"
+		dx="${arm_length*cos60}"
+		dy="-${arm_length*sin60}"
+		dz="${rotor_offset_top}"
+		ix="9.75e-06"
+		iy="0.000166704"
+		iz="0.000167604">
+  </xacro:gazebo_rotor>
+
+  <xacro:gazebo_rotor
+    robot_namespace="${namespace}"
+    suffix="right_bottom"
+    direction="${cw}" 
+    parent="${namespace}/base_link"
+    mass_rotor="${mass_rotor}"
+    radius_rotor="${radius_rotor}"
+    motor_number="4"
+    color="Blue"
+		string_dir="cw"
+		dx="${arm_length*cos60}"
+		dy="-${arm_length*sin60}"
+		dz="-${rotor_offset_top-0.006}"
+		ix="9.75e-06"
+		iy="0.000166704"
+		iz="0.000167604">
+  </xacro:gazebo_rotor>
+
+  <xacro:gazebo_rotor
+    robot_namespace="${namespace}"
+    suffix="left_top"
+    direction="${ccw}" 
+    parent="${namespace}/base_link"
+    mass_rotor="${mass_rotor}"
+    radius_rotor="${radius_rotor}"
+    motor_number="2"
+    color="Red"
+		string_dir="ccw"
+		dx="${arm_length*cos60}"
+		dy="${arm_length*sin60}"
+		dz="${rotor_offset_top}"
+		ix="9.75e-06"
+		iy="0.000166704"
+		iz="0.000167604">
+  </xacro:gazebo_rotor>
+
+  <xacro:gazebo_rotor
+    robot_namespace="${namespace}"
+    suffix="left_bottom"
+    direction="${cw}" 
+    parent="${namespace}/base_link"
+    mass_rotor="${mass_rotor}"
+    radius_rotor="${radius_rotor}"
+    motor_number="5"
+    color="Blue"
+		string_dir="cw"
+		dx="${arm_length*cos60}"
+		dy="${arm_length*sin60}"
+		dz="-${rotor_offset_top-0.006}"
+		ix="9.75e-06"
+		iy="0.000166704"
+		iz="0.000167604">
+  </xacro:gazebo_rotor>
+
+
+</robot>

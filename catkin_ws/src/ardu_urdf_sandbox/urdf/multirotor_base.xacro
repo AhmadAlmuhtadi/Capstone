@@ -1,0 +1,441 @@
+<?xml version="1.0"?>
+<!--
+  Copyright 2015 Fadri Furrer, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Michael Burri, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Mina Kamel, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Janosch Nikolic, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Markus Achtelik, ASL, ETH Zurich, Switzerland
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Macro for the inertia of a box -->
+  <xacro:macro name="box_inertia" params="x y z mass">
+    <inertia ixx="${0.0833333 * mass * (y*y + z*z)}" ixy="0.0" ixz="0.0"
+      iyy="${0.0833333 * mass * (x*x + z*z)}" iyz="0.0"
+      izz="${0.0833333 * mass * (x*x + y*y)}" />
+  </xacro:macro>
+
+  <!-- Macro for the inertial properties of a box -->
+  <xacro:macro name="box_inertial" params="x y z mass *origin">
+    <inertial>
+      <mass value="${mass}" />
+      <xacro:insert_block name="origin" />
+      <xacro:box_inertia x="${x}" y="${y}" z="${z}" mass="${mass}" />
+    </inertial>
+  </xacro:macro>
+
+  <!-- Main multirotor link -->
+  <xacro:macro name="multirotor_base_macro"
+    params="robot_namespace mass body_width body_height use_mesh_file mesh_file *inertia">
+
+    <link name="${robot_namespace}/base_link"></link>
+
+
+    <joint name="${robot_namespace}/base_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <parent link="${robot_namespace}/base_link" />
+      <child link="${robot_namespace}/base_link_inertia" />
+    </joint>
+
+
+    <link name="${robot_namespace}/base_link_inertia">
+      <inertial>
+        <mass value="${mass}" />  <!-- [kg] -->
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:insert_block name="inertia" />
+      </inertial>
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <xacro:if value="${use_mesh_file}">
+            <mesh filename="${mesh_file}" scale="1 1 1" />
+          </xacro:if>
+          <xacro:unless value="${use_mesh_file}">
+            <box size="${body_width} ${body_width} ${body_height}"/> <!-- [m] [m] [m] -->
+          </xacro:unless>
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <box size="${body_width} ${body_width} ${body_height}" /> 
+        </geometry>
+			</collision>
+    </link>
+			<gazebo reference="${robot_namespace}/base_link">
+		    <collision name="${robot_namespace}/base_link_collision">
+		      <surface>
+		        <contact>
+		          <ode>
+		            <max_vel>100.0</max_vel>
+		            <min_depth>0.001</min_depth>
+		          </ode>
+		        </contact>
+		        <friction>
+		          <ode>
+		            <mu>100000.0</mu>
+		            <mu2>100000.0</mu2>
+		          </ode>
+		        </friction>
+		      </surface>        
+		    </collision>
+			</gazebo>
+
+
+
+	<gazebo reference="${robot_namespace}/base_link">
+      <velocity_decay>
+        <linear>0.0</linear>
+        <angular>0.0</angular>
+      </velocity_decay>    
+	</gazebo>
+    
+	<gazebo>
+    <joint name='imu_joint' type='revolute'>
+      <parent>${robot_namespace}/base_link</parent>
+      <child>imu_link</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <damping>1.0</damping>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+      <physics>
+        <ode>
+          <implicit_spring_damper>1</implicit_spring_damper>
+        </ode>
+      </physics>
+    </joint>
+    <link name='imu_link'>
+      <inertial>
+        <pose>0 0 0 0 -0 0</pose>
+        <mass>0.15</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.002</izz>
+        </inertia>
+      </inertial>
+      <sensor name='imu_sensor' type='imu'>
+        <always_on>1</always_on>
+        <update_rate>1000</update_rate>
+        <pose>0 0 0 -3.14159 -0 0</pose>
+      </sensor>
+    </link>
+    <joint name='${robot_namespace}/ground_truth/odometry_sensorgt_joint' type='revolute'>
+      <parent>${robot_namespace}/base_link</parent>
+      <child>${robot_namespace}/ground_truth/odometry_sensorgt_link</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <damping>1.0</damping>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+      <physics>
+        <ode>
+          <implicit_spring_damper>1</implicit_spring_damper>
+        </ode>
+      </physics>
+    </joint>
+    <link name='${robot_namespace}/ground_truth/odometry_sensorgt_link'>
+      <inertial>
+        <pose>0 0 0 0 -0 0</pose>
+        <mass>0.15</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+    </link>
+	</gazebo>
+
+    
+    <!--
+    <gazebo>
+      <plugin filename="librotors_gazebo_multirotor_base_plugin.so" name="multirotor_base_plugin">
+        <robotNamespace>${robot_namespace}</robotNamespace>
+        <linkName>${robot_namespace}/base_link</linkName>
+        <rotorVelocitySlowdownSim>${rotor_velocity_slowdown_sim}</rotorVelocitySlowdownSim>
+      </plugin>
+    </gazebo>
+		-->
+		
+  </xacro:macro>
+
+  <!-- Rotor joint and link -->
+  <xacro:macro name="gazebo_rotor"
+    params="robot_namespace suffix direction parent mass_rotor radius_rotor motor_number color dx dy dz ix iy iz string_dir">
+
+		<gazebo>
+		  <joint name='${robot_namespace}/rotor_${motor_number}_joint' type='revolute'>
+		    <parent>${parent}</parent>
+		    <child>${robot_namespace}/rotor_${motor_number}</child>
+		    <axis>
+		      <xyz>0 0 1</xyz>
+		      <limit>
+		        <lower>-1e+16</lower>
+		        <upper>1e+16</upper>
+		      </limit>
+		      <dynamics>
+		        <damping>0.004</damping>
+		      </dynamics>
+		      <use_parent_model_frame>1</use_parent_model_frame>
+		    </axis>
+		    <physics>
+		      <ode>
+		        <implicit_spring_damper>1</implicit_spring_damper>
+		      </ode>
+		    </physics>
+		  </joint>
+		  <link name='${robot_namespace}/rotor_${motor_number}'>
+		    <pose>${dx} ${dy} ${dz} 0 -0 0</pose>
+		    <inertial>
+		      <pose>0 0 0 0 -0 0</pose>
+		      <mass>${mass_rotor}</mass>
+		      <inertia>
+		        <ixx>${ix}</ixx>
+		        <ixy>0</ixy>
+		        <ixz>0</ixz>
+		        <iyy>${iy}</iyy>
+		        <iyz>0</iyz>
+		        <izz>${iz}</izz>
+		      </inertia>
+		    </inertial>
+		    <collision name='${robot_namespace}/rotor_3_collision'>
+		      <pose>0 0 0 0 -0 0</pose>
+		      <geometry>
+		        <cylinder>
+		          <length>0.005</length>
+		          <radius>${radius_rotor}</radius>
+		        </cylinder>
+		      </geometry>
+		      <surface>
+		        <contact>
+		          <ode/>
+		        </contact>
+		        <friction>
+		          <ode/>
+		        </friction>
+		      </surface>
+		    </collision>
+		    <visual name='${robot_namespace}/rotor_3_visual'>
+		      <pose>0 0 0 0 -0 0</pose>
+		      <geometry>
+		        <mesh>
+		          <scale>${radius_rotor} ${radius_rotor} ${radius_rotor}</scale>
+		          <uri>/home/ahmad/catkin_ws/src/ardu_urdf_sandbox/meshes/propeller_${string_dir}.dae</uri>
+		        </mesh>
+		      </geometry>
+		      <material>
+		        <script>
+		          <name>Gazebo/${color}</name>
+		          <uri>file://media/materials/scripts/gazebo.material</uri>
+		        </script>
+		      </material>
+		    </visual>
+		  </link>
+		  
+	    <plugin name="rotor_${motor_number}_blade_1" filename="libLiftDragPlugin.so">
+			  <a0>0.3</a0>
+			  <alpha_stall>1.4</alpha_stall>
+			  <cla>4.25</cla>
+			  <cda>0.15</cda>
+			  <cma>0.00</cma>
+			  <cla_stall>-0.025</cla_stall>
+			  <cda_stall>0.0</cda_stall>
+			  <cma_stall>0.0</cma_stall>
+			  <area>0.002</area>
+			  <air_density>1.2041</air_density>
+			  <cp>0.084 0 0</cp>
+			  <forward>0 ${direction} 0</forward>
+			  <upward>0 0 1</upward>
+			  <link_name>${robot_namespace}::${robot_namespace}/rotor_${motor_number}</link_name>
+			</plugin>
+			<plugin name="rotor_${motor_number}_blade_2" filename="libLiftDragPlugin.so">
+			  <a0>0.3</a0>
+			  <alpha_stall>1.4</alpha_stall>
+			  <cla>4.25</cla>
+			  <cda>0.15</cda>
+			  <cma>0.00</cma>
+			  <cla_stall>-0.025</cla_stall>
+			  <cda_stall>0.0</cda_stall>
+			  <cma_stall>0.0</cma_stall>
+			  <area>0.002</area>
+			  <air_density>1.2041</air_density>
+			  <cp>-0.084 0 0</cp>
+			  <forward>0 ${-direction} 0</forward>
+			  <upward>0 0 1</upward>
+			  <link_name>${robot_namespace}::${robot_namespace}/rotor_${motor_number}</link_name>
+			</plugin>
+		</gazebo>
+
+  </xacro:macro>
+
+  <xacro:macro name="vertical_rotor"
+    params="robot_namespace suffix direction motor_constant moment_constant parent mass_rotor radius_rotor time_constant_up time_constant_down max_rot_velocity motor_number rotor_drag_coefficient rolling_moment_coefficient color use_own_mesh mesh *origin *inertia">
+    <joint name="${robot_namespace}/rotor_${motor_number}_joint" type="continuous">
+      <xacro:insert_block name="origin" />
+      <!-- TODO(ff): not currently set because it's not yet supported -->
+      <!-- <limit effort="2000" velocity="${max_rot_velocity}" /> -->
+      <parent link="${parent}" />
+      <child link="${robot_namespace}/rotor_${motor_number}" />
+    </joint>
+    <link name="${robot_namespace}/rotor_${motor_number}">
+      <inertial>
+        <mass value="${mass_rotor}" /> <!-- [kg] -->
+        <xacro:insert_block name="inertia" />
+      </inertial>
+      <visual>
+        <geometry>
+          <!-- <cylinder length="0.005" radius="${radius_rotor}"/> --> <!-- [m] -->
+          <xacro:if value="${use_own_mesh}">
+            <mesh filename="${mesh}"
+              scale="1 1 1" />
+          </xacro:if>
+          <xacro:unless value="${use_own_mesh}">
+            <xacro:if value="${direction-1}">
+	            <mesh filename="package://ardu_urdf_sandbox/meshes/propeller_ccw.dae"
+  	            scale="${radius_rotor} ${radius_rotor} ${radius_rotor}" /> <!-- The propeller meshes have a radius of 1m -->
+  	        </xacro:if>
+  	        <xacro:if value="${direction+1}">
+	            <mesh filename="package://ardu_urdf_sandbox/meshes/propeller_cw.dae"
+  	            scale="${radius_rotor} ${radius_rotor} ${radius_rotor}" /> <!-- The propeller meshes have a radius of 1m -->
+  	        </xacro:if>  	        
+            <!-- <box size="${2*radius_rotor} 0.01 0.005"/> -->
+          </xacro:unless>
+        </geometry>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder length="0.005" radius="${radius_rotor}" /> <!-- [m] -->
+        </geometry>
+      </collision>
+    </link>
+    
+    <gazebo reference="${robot_namespace}/rotor_${motor_number}_collision">
+        <surface>
+          <contact>
+            <ode/>
+          </contact>
+          <friction>
+            <ode/>
+          </friction>
+        </surface>
+		</gazebo>
+		
+		<gazebo reference="${robot_namespace}/rotor_${motor_number}_joint">
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e+16</lower>
+          <upper>1e+16</upper>
+        </limit>
+        <dynamics>
+          <damping>0.004</damping>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+      <physics>
+        <ode>
+          <implicit_spring_damper>1</implicit_spring_damper>
+        </ode>
+      </physics>
+		</gazebo>
+    
+    <gazebo>
+      <plugin name="rotor_${motor_number}_blade_1" filename="libLiftDragPlugin.so">
+		    <a0>0.3</a0>
+		    <alpha_stall>1.4</alpha_stall>
+		    <cla>4.2500</cla>
+		    <cda>0.10</cda>
+		    <cma>0.00</cma>
+		    <cla_stall>-0.025</cla_stall>
+		    <cda_stall>0.0</cda_stall>
+		    <cma_stall>0.0</cma_stall>
+		    <area>0.002</area>
+		    <air_density>1.2041</air_density>
+		    <cp>0.084 0 0</cp>
+		    <forward>0 ${direction} 0</forward>
+		    <upward>0 0 1</upward>
+		    <link_name>${robot_namespace}::${robot_namespace}/rotor_${motor_number}</link_name>
+		  </plugin>
+		  <plugin name="rotor_${motor_number}_blade_2" filename="libLiftDragPlugin.so">
+		    <a0>0.3</a0>
+		    <alpha_stall>1.4</alpha_stall>
+		    <cla>4.2500</cla>
+		    <cda>0.10</cda>
+		    <cma>0.00</cma>
+		    <cla_stall>-0.025</cla_stall>
+		    <cda_stall>0.0</cda_stall>
+		    <cma_stall>0.0</cma_stall>
+		    <area>0.002</area>
+		    <air_density>1.2041</air_density>
+		    <cp>-0.084 0 0</cp>
+		    <forward>0 ${-direction} 0</forward>
+		    <upward>0 0 1</upward>
+		    <link_name>${robot_namespace}::${robot_namespace}/rotor_${motor_number}</link_name>
+		  </plugin>
+		</gazebo>
+    
+  <!--
+    <gazebo>
+      <plugin name="${robot_namespace}_${suffix}_motor_model" filename="librotors_gazebo_motor_model.so">
+        <robotNamespace>${robot_namespace}</robotNamespace>
+        <jointName>${robot_namespace}/rotor_${motor_number}_joint</jointName>
+        <linkName>${robot_namespace}/rotor_${motor_number}</linkName>
+        <turningDirection>${direction}</turningDirection>
+        <timeConstantUp>${time_constant_up}</timeConstantUp>
+        <timeConstantDown>${time_constant_down}</timeConstantDown>
+        <maxRotVelocity>${max_rot_velocity}</maxRotVelocity>
+        <motorConstant>${motor_constant}</motorConstant>
+        <momentConstant>${moment_constant}</momentConstant>
+        <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
+        <motorNumber>${motor_number}</motorNumber>
+        <rotorDragCoefficient>${rotor_drag_coefficient}</rotorDragCoefficient>
+        <rollingMomentCoefficient>${rolling_moment_coefficient}</rollingMomentCoefficient>
+        <motorSpeedPubTopic>motor_speed/${motor_number}</motorSpeedPubTopic>
+        <rotorVelocitySlowdownSim>${rotor_velocity_slowdown_sim}</rotorVelocitySlowdownSim>
+      </plugin>
+    </gazebo>
+  -->
+    <gazebo reference="${robot_namespace}/rotor_${motor_number}">
+      <material>Gazebo/${color}</material>
+    </gazebo>
+  </xacro:macro>
+</robot>
